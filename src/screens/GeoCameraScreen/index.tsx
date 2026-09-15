@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Camera, CameraApi } from 'react-native-camera-kit';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { captureRef } from 'react-native-view-shot';
 import { AppButton } from '../../components/AppButton';
@@ -59,7 +59,18 @@ const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() =>
  * behind the live preview and snapshots it with view-shot — the same component
  * the engineer sees over the viewfinder, so the result matches the preview.
  */
-export default function GeoCameraScreen({ route, navigation }: Props) {
+export default function GeoCameraScreen(props: Props) {
+  // fullScreenModal presentation opens its own native view controller, which
+  // the root SafeAreaProvider doesn't track — re-measure insets locally so
+  // the top bar clears the notch/dynamic island instead of sitting under it.
+  return (
+    <SafeAreaProvider>
+      <GeoCameraScreenContent {...props} />
+    </SafeAreaProvider>
+  );
+}
+
+function GeoCameraScreenContent({ route, navigation }: Props) {
   const { valuationId, remaining } = route.params;
   const { width: screenWidth } = useWindowDimensions();
 
@@ -90,7 +101,6 @@ export default function GeoCameraScreen({ route, navigation }: Props) {
 
   const left = remaining - taken.length;
   const gpsReady = !!location && location.accuracy <= MAX_ACCURACY_METRES;
-  const previewHeight = (screenWidth * 4) / 3;
 
   const shoot = useCallback(async () => {
     if (busy || !cameraRef.current) {
@@ -159,6 +169,14 @@ export default function GeoCameraScreen({ route, navigation }: Props) {
   if (permission !== 'granted') {
     return (
       <SafeAreaView style={styles.permission}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={12}
+          accessibilityLabel="Close camera"
+          style={[styles.roundButton, styles.permissionClose]}
+        >
+          <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
+        </Pressable>
         {permission === 'pending' ? (
           <ActivityIndicator color={darkColors.primary} />
         ) : (
@@ -232,7 +250,7 @@ export default function GeoCameraScreen({ route, navigation }: Props) {
         </Pressable>
       </SafeAreaView>
 
-      <View style={[styles.preview, { width: screenWidth, height: previewHeight }]}>
+      <View style={styles.preview}>
         <Suspense fallback={<ActivityIndicator color={darkColors.primary} style={styles.flex} />}>
           <Camera
             ref={cameraRef}
@@ -314,6 +332,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 8,
     backgroundColor: '#000000',
+    zIndex: 10,
+    elevation: 10,
   },
   roundButton: {
     width: 40,
@@ -338,6 +358,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   preview: {
+    flex: 1,
     overflow: 'hidden',
     backgroundColor: '#000000',
   },
@@ -355,10 +376,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomBar: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 16,
     paddingHorizontal: 28,
     backgroundColor: '#000000',
   },
@@ -428,6 +449,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 28,
     backgroundColor: darkColors.background,
+  },
+  permissionClose: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
   },
   permissionTitle: {
     color: darkColors.foreground,

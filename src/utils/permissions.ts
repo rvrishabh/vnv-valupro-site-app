@@ -1,5 +1,10 @@
-import { PermissionsAndroid, Platform } from 'react-native';
-import CameraKit from 'react-native-camera-kit';
+import { PermissionsAndroid, Platform, TurboModuleRegistry } from 'react-native';
+
+// `Camera` from react-native-camera-kit only exposes authorization checks
+// through a mounted component's ref, so we call the underlying native
+// module directly here, before any Camera view exists.
+type CameraKitModule = { checkDeviceCameraAuthorizationStatus(): Promise<boolean>; getConstants?(): {} };
+const cameraKitModule = TurboModuleRegistry.get<CameraKitModule>('RNCameraKitModule');
 
 export const requestLocationPermission = async () => {
   if (Platform.OS !== 'android') {
@@ -26,5 +31,5 @@ export const requestCameraPermission = async () => {
     });
     return result === PermissionsAndroid.RESULTS.GRANTED;
   }
-  return Boolean(await CameraKit.requestDeviceCameraAuthorization());
+  return Boolean(await cameraKitModule?.checkDeviceCameraAuthorizationStatus());
 };

@@ -2,6 +2,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   Pressable,
@@ -54,6 +55,7 @@ export default function CaseDetailScreen({ route, navigation }: Props) {
   const { data: item, isLoading, isError, error, refetch, isRefetching } =
     useGetCaseByIdQuery(caseId);
   const startVisit = useStartVisitMutation();
+  
 
   const stage = item ? getVisitStage(item) : null;
   const { data: timeline } = useGetCaseTimelineQuery(caseId, stage === 'query');
@@ -124,15 +126,21 @@ export default function CaseDetailScreen({ route, navigation }: Props) {
           </Text>
 
           <View style={styles.quickActions}>
-            <Pressable
-              style={[glassCardStyles.pill, styles.quickAction]}
-              onPress={() => Linking.openURL(`tel:${item.customerMobile}`)}
-              accessibilityRole="button"
-              accessibilityLabel={`Call ${item.customerName}`}
-            >
-              <MaterialCommunityIcons name="phone" size={18} color={darkColors.primarySoft} />
-              <Text style={styles.quickActionText}>Call</Text>
-            </Pressable>
+            {item.customerMobile ? (
+              <Pressable
+                style={[glassCardStyles.pill, styles.quickAction]}
+                onPress={() =>
+                  Linking.openURL(`tel:${item.customerMobile.replace(/\s+/g, '')}`).catch(() =>
+                    Alert.alert('Could not place call', 'This device cannot open the dialer.'),
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Call ${item.customerName}`}
+              >
+                <MaterialCommunityIcons name="phone" size={18} color={darkColors.primarySoft} />
+                <Text style={styles.quickActionText}>Call</Text>
+              </Pressable>
+            ) : null}
             {item.propertyLocation ? (
               <Pressable
                 style={[glassCardStyles.pill, styles.quickAction]}
