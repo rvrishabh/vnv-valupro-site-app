@@ -5,7 +5,8 @@
   "scripts": {
     "android": ". scripts/check-android-java.sh && react-native run-android",
     "doctor": ". scripts/check-android-java.sh && react-native doctor",
-    "ios": "bash scripts/check-ios-simulator.sh && react-native run-ios",
+    "ios": "bash scripts/check-ios-simulator.sh && bash scripts/run-ios-simulator.sh",
+    "ios:device": "react-native run-ios --device",
     "ios:download-platform": "xcodebuild -downloadPlatform iOS",
     "pod-install": "bash scripts/pod-install.sh",
     "lint": "eslint .",

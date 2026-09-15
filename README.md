@@ -11,7 +11,7 @@ pnpm install
 cp .env.example .env        # set API_BASE_URL (must include /api/v1)
 pnpm start                  # Metro
 pnpm pod-install            # iOS pods (works even when Xcode is at a path with spaces)
-pnpm android                # or: pnpm ios
+pnpm android                # or: pnpm ios (simulator; IOS_SIMULATOR="iPhone 17" to pick one, pnpm ios:device for a phone)
 pnpm test
 pnpm lint
 pnpm typecheck
