@@ -1,6 +1,6 @@
 import React from 'react';
 import { Control, Controller, FieldValues, Path } from 'react-hook-form';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { authGlass, glassCardStyles } from '../../theme/glassSurface';
 import { darkColors } from '../../theme/colors';
 import { glassFieldStyles } from './glassFieldStyles';
@@ -65,22 +65,22 @@ export function FormChipSelect<T extends FieldValues>({
               {options.map(option => {
                 const isSelected = selected.includes(option);
                 return (
-                  <Pressable
+                  <TouchableOpacity
                     key={option}
                     onPress={() => toggle(option)}
+                    activeOpacity={0.7}
                     accessibilityRole={multiple ? 'checkbox' : 'radio'}
                     accessibilityState={{ checked: isSelected }}
-                    style={({ pressed }) => [
+                    style={[
                       glassCardStyles.pill,
                       styles.chip,
                       isSelected && styles.chipSelected,
-                      pressed && styles.chipPressed,
                     ]}
                   >
                     <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>
                       {option}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -105,13 +105,13 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   chipSelected: {
-    backgroundColor: 'rgba(201, 168, 76, 0.18)',
+    backgroundColor: 'rgba(201, 168, 76, 0.28)',
     borderColor: authGlass.selectedBorder,
-  },
-  chipPressed: {
-    opacity: 0.8,
+    borderWidth: 1.5,
   },
   chipLabel: {
     color: darkColors.mutedForeground,
