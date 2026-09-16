@@ -96,6 +96,9 @@ importers:
       '@babel/core':
         specifier: ^7.25.2
         version: 7.29.7
+      '@babel/plugin-transform-react-jsx':
+        specifier: 7.29.7
+        version: 7.29.7(@babel/core@7.29.7)
       '@babel/preset-env':
         specifier: ^7.25.3
         version: 7.29.7(@babel/core@7.29.7)
@@ -147,6 +150,9 @@ importers:
       eslint:
         specifier: ^8.57.1
         version: 8.57.1
+      hermes-compiler:
+        specifier: 0.14.0
+        version: 0.14.0
       jest:
         specifier: ^29.6.3
         version: 29.7.0(@types/node@26.5.1)
