@@ -69,6 +69,11 @@ export function GeoStampOverlay({
                 {address.line}
               </Text>
             ) : null}
+            {address ? (
+              <Text style={[styles.line, styles.strong, { fontSize: 10 * s, lineHeight: 13 * s, marginTop: 2 * s }]}>
+                PIN {address.pincode ?? 'not available'}
+              </Text>
+            ) : null}
             <Text style={[styles.line, styles.strong, { fontSize: 10 * s, lineHeight: 13 * s, marginTop: 3 * s }]}>
               Lat {formatCoordinate(location.latitude)}, Long {formatCoordinate(location.longitude)}
             </Text>

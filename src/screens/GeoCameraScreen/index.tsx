@@ -8,6 +8,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -33,6 +34,9 @@ const FLASH_ICON: Record<FlashMode, string> = {
   on: 'flash',
   off: 'flash-off',
 };
+
+/** Zoom presets, like the stock camera. Devices without an ultra-wide lens clamp 0.5x to their widest view. */
+const ZOOM_PRESETS = [0.5, 1, 2];
 
 /** Longest edge of the stamped JPEG; the backend re-encodes to ≤2000 px anyway. */
 const OUTPUT_MAX_WIDTH = 1600;
@@ -78,6 +82,8 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
   const [flash, setFlash] = useState<FlashMode>('auto');
   const [busy, setBusy] = useState(false);
   const [taken, setTaken] = useState<string[]>([]);
+  const [zoom, setZoom] = useState<number | undefined>(undefined);
+  const [activeZoom, setActiveZoom] = useState(1);
   const [pending, setPending] = useState<PendingShot | null>(null);
 
   const cameraRef = useRef<CameraApi>(null);
@@ -97,6 +103,15 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
       ]);
       setPermission(camera && gps ? 'granted' : 'denied');
     })();
+  }, []);
+
+  // The native camera only pinch-zooms while `zoom` is unset, so a preset is
+  // applied for a moment and then released; the lens keeps the zoom it was
+  // given and pinch carries on from there.
+  const applyZoom = useCallback((value: number) => {
+    setActiveZoom(value);
+    setZoom(value);
+    setTimeout(() => setZoom(undefined), 150);
   }, []);
 
   const left = remaining - taken.length;
@@ -258,11 +273,31 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
             flashMode={flash}
             focusMode="on"
             zoomMode="on"
+            zoom={zoom}
+            onZoom={event => setActiveZoom(event.nativeEvent.zoom)}
             resizeMode="cover"
             shutterPhotoSound
             onError={event => Alert.alert('Camera error', event.nativeEvent.errorMessage)}
           />
         </Suspense>
+        <View style={styles.zoomBar} pointerEvents="box-none">
+          {ZOOM_PRESETS.map(preset => {
+            const active = Math.abs(activeZoom - preset) < 0.25;
+            return (
+              <TouchableOpacity
+                key={preset}
+                onPress={() => applyZoom(preset)}
+                accessibilityRole="button"
+                accessibilityLabel={`Zoom ${preset}x`}
+                style={[styles.zoomChip, active && styles.zoomChipActive]}
+              >
+                <Text style={[styles.zoomText, active && styles.zoomTextActive]}>
+                  {active && Math.abs(activeZoom - preset) > 0.02 ? `${activeZoom.toFixed(1)}x` : `${preset}x`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         {location ? (
           <GeoStampOverlay width={screenWidth} location={location} address={address} heading={heading} takenAt={new Date()} />
         ) : (
@@ -361,6 +396,36 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
     backgroundColor: '#000000',
+  },
+  // Sits above the stamp panel (~170 px tall at phone width).
+  zoomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 190,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  zoomChip: {
+    minWidth: 44,
+    height: 34,
+    borderRadius: 17,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  zoomChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
+  zoomText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  zoomTextActive: {
+    color: '#000000',
   },
   waiting: {
     position: 'absolute',

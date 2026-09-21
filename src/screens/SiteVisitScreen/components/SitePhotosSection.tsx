@@ -9,9 +9,11 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SectionCard } from '../../../components/SectionCard';
 import { useDeleteSitePhotoMutation } from '../../../mutations/site-visit/useDeleteSitePhotoMutation';
@@ -27,6 +29,8 @@ import {
   MIN_SITE_VISIT_PHOTOS,
   ValuationPhoto,
 } from '../../../types/site-visit.types';
+
+const TILE_GAP = 8;
 
 type PendingUpload = LocalPhoto & {
   key: string;
@@ -45,6 +49,11 @@ export function SitePhotosSection({ valuationId, readOnly, error }: SitePhotosSe
   const upload = useUploadSitePhotoMutation();
   const remove = useDeleteSitePhotoMutation();
   const [pending, setPending] = useState<PendingUpload[]>([]);
+  // Explicit square size: percentage width + aspectRatio inside a wrapping row
+  // lets Yoga squash later rows, which pushed the icon down in the second row.
+  const [gridWidth, setGridWidth] = useState(0);
+  const tileSide = gridWidth > 0 ? Math.floor((gridWidth - TILE_GAP * 2) / 3) : undefined;
+  const tileSize = tileSide ? { width: tileSide, height: tileSide } : undefined;
   const [preview, setPreview] = useState<ValuationPhoto | null>(null);
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
@@ -76,25 +85,72 @@ export function SitePhotosSection({ valuationId, readOnly, error }: SitePhotosSe
   const uploadOneRef = useRef(uploadOne);
   uploadOneRef.current = uploadOne;
 
-  // Photos can only come from the in-app geo camera, which stamps each shot
-  // and hands it over here while the engineer keeps shooting.
+  const enqueue = (photo: LocalPhoto) => {
+    const item: PendingUpload = {
+      ...photo,
+      key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      status: 'uploading',
+    };
+    setPending(list => [...list, item]);
+    queue.current = queue.current.then(() => uploadOneRef.current(item));
+  };
+  const enqueueRef = useRef(enqueue);
+  enqueueRef.current = enqueue;
+
+  // Stamped shots from the in-app geo camera arrive here while the engineer
+  // keeps shooting.
   useEffect(
-    () =>
-      capturedPhotoStore.subscribe(valuationId, photo => {
-        const item: PendingUpload = {
-          ...photo,
-          key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          status: 'uploading',
-        };
-        setPending(list => [...list, item]);
-        queue.current = queue.current.then(() => uploadOneRef.current(item));
-      }),
+    () => capturedPhotoStore.subscribe(valuationId, photo => enqueueRef.current(photo)),
     [valuationId],
   );
 
+  // Photos already on the phone — e.g. shot with no signal, or with the stock
+  // camera. They carry no geo stamp, so the GPS field and camera remain the
+  // proof of presence.
+  const pickFromGallery = async () => {
+    if (remaining === 0) {
+      Alert.alert(
+        'Photo limit reached',
+        `A visit can have up to ${MAX_SITE_VISIT_PHOTOS} site photos.`,
+      );
+      return;
+    }
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: remaining,
+      maxWidth: 2000,
+      maxHeight: 2000,
+      quality: 0.8,
+    });
+    if (result.errorCode) {
+      Alert.alert('Could not open gallery', result.errorMessage ?? result.errorCode);
+      return;
+    }
+    (result.assets ?? []).forEach(asset => {
+      if (asset.uri) {
+        enqueue({
+          uri: asset.uri,
+          type: asset.type ?? 'image/jpeg',
+          fileName: asset.fileName ?? `gallery-${Date.now()}.jpg`,
+        });
+      }
+    });
+  };
+
+  const retryAll = () => {
+    pending
+      .filter(p => p.status === 'failed')
+      .forEach(item => {
+        queue.current = queue.current.then(() => uploadOneRef.current(item));
+      });
+  };
+
   const openCamera = () => {
     if (remaining === 0) {
-      Alert.alert('Photo limit reached', `A visit can have up to ${MAX_SITE_VISIT_PHOTOS} site photos.`);
+      Alert.alert(
+        'Photo limit reached',
+        `A visit can have up to ${MAX_SITE_VISIT_PHOTOS} site photos.`,
+      );
       return;
     }
     navigation.navigate('GeoCamera', { valuationId, remaining });
@@ -125,19 +181,22 @@ export function SitePhotosSection({ valuationId, readOnly, error }: SitePhotosSe
     >
       {!readOnly ? (
         <Text style={styles.hint}>
-          Take at least {MIN_SITE_VISIT_PHOTOS} photos at the site — front elevation, road, each floor, meter and
-          surroundings. Each photo is stamped with GPS location, direction and time, and uploads as soon as it is taken.
+          Take at least {MIN_SITE_VISIT_PHOTOS} photos at the site — front elevation, road, each
+          floor, meter and surroundings. Camera photos are stamped with GPS location, direction and
+          time and upload as soon as they are taken. With no signal, keep shooting or add from your
+          gallery and tap Retry when you are back online. The office chooses which photos go into
+          the report.
         </Text>
       ) : null}
 
       {isLoading ? (
         <ActivityIndicator color={darkColors.primary} style={styles.loader} />
       ) : (
-        <View style={styles.grid}>
+        <View style={styles.grid} onLayout={event => setGridWidth(event.nativeEvent.layout.width)}>
           {sitePhotos.map(photo => (
             <Pressable
               key={photo.id}
-              style={styles.tile}
+              style={[styles.tile, tileSize]}
               onPress={() => setPreview(photo)}
               accessibilityRole="imagebutton"
               accessibilityLabel="Open site photo"
@@ -149,7 +208,7 @@ export function SitePhotosSection({ valuationId, readOnly, error }: SitePhotosSe
           {pending.map(item => (
             <Pressable
               key={item.key}
-              style={styles.tile}
+              style={[styles.tile, tileSize]}
               disabled={item.status !== 'failed'}
               onPress={() => uploadOne(item)}
               accessibilityLabel={item.status === 'failed' ? 'Retry upload' : 'Uploading photo'}
@@ -179,55 +238,98 @@ export function SitePhotosSection({ valuationId, readOnly, error }: SitePhotosSe
           ))}
 
           {!readOnly && remaining > 0 ? (
-            <Pressable
-              style={[styles.tile, styles.addTile]}
-              onPress={openCamera}
-              accessibilityRole="button"
-              accessibilityLabel="Open geo camera"
-            >
-              <MaterialCommunityIcons name="camera-marker-outline" size={28} color={darkColors.primary} />
-              <Text style={styles.addText}>Camera</Text>
-            </Pressable>
+            <>
+              <TouchableOpacity
+                style={[styles.tile, tileSize, styles.addTile]}
+                onPress={openCamera}
+                accessibilityRole="button"
+                accessibilityLabel="Open geo camera"
+              >
+                <MaterialCommunityIcons
+                  name="camera-marker-outline"
+                  size={28}
+                  color={darkColors.primary}
+                />
+                <Text style={styles.addText}>Camera</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tile, tileSize, styles.addTile]}
+                onPress={pickFromGallery}
+                accessibilityRole="button"
+                accessibilityLabel="Add photos from gallery"
+              >
+                <MaterialCommunityIcons name="image-plus" size={28} color={darkColors.primary} />
+                <Text style={styles.addText}>Gallery</Text>
+              </TouchableOpacity>
+            </>
           ) : null}
         </View>
       )}
 
       {pending.some(p => p.status === 'failed') ? (
-        <Text style={styles.error}>
-          {pending.find(p => p.status === 'failed')?.error ?? 'Upload failed'} — tap a photo to retry.
-        </Text>
+        <View style={styles.failedRow}>
+          <Text style={[styles.error, styles.failedText]}>
+            {pending.filter(p => p.status === 'failed').length} photo(s) not uploaded —{' '}
+            {pending.find(p => p.status === 'failed')?.error ?? 'upload failed'}. Tap a photo to
+            retry.
+          </Text>
+          <TouchableOpacity
+            onPress={retryAll}
+            accessibilityRole="button"
+            accessibilityLabel="Retry all uploads"
+          >
+            <Text style={styles.retryAll}>Retry all</Text>
+          </TouchableOpacity>
+        </View>
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : null}
 
-      <Modal visible={!!preview} animationType="fade" transparent onRequestClose={() => setPreview(null)}>
-        <View style={styles.previewBackdrop}>
-          <SafeAreaView style={styles.previewSafe}>
-            <View style={styles.previewActions}>
-              {!readOnly && preview ? (
+      <Modal
+        visible={!!preview}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setPreview(null)}
+      >
+        {/* A Modal is its own native view controller, so it needs its own
+            SafeAreaProvider to measure the notch (same as GeoCameraScreen). */}
+        <SafeAreaProvider>
+          <View style={styles.previewBackdrop}>
+            <SafeAreaView style={styles.previewSafe}>
+              <View style={styles.previewActions}>
+                {!readOnly && preview ? (
+                  <Pressable
+                    onPress={() => confirmDelete(preview)}
+                    style={styles.previewButton}
+                    accessibilityLabel="Delete photo"
+                  >
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={24}
+                      color={darkColors.destructive}
+                    />
+                  </Pressable>
+                ) : (
+                  <View />
+                )}
                 <Pressable
-                  onPress={() => confirmDelete(preview)}
+                  onPress={() => setPreview(null)}
                   style={styles.previewButton}
-                  accessibilityLabel="Delete photo"
+                  accessibilityLabel="Close preview"
                 >
-                  <MaterialCommunityIcons name="trash-can-outline" size={24} color={darkColors.destructive} />
+                  <MaterialCommunityIcons name="close" size={26} color="#FFFFFF" />
                 </Pressable>
-              ) : (
-                <View />
-              )}
-              <Pressable
-                onPress={() => setPreview(null)}
-                style={styles.previewButton}
-                accessibilityLabel="Close preview"
-              >
-                <MaterialCommunityIcons name="close" size={26} color="#FFFFFF" />
-              </Pressable>
-            </View>
-            {preview ? (
-              <Image source={{ uri: preview.url }} style={styles.previewImage} resizeMode="contain" />
-            ) : null}
-          </SafeAreaView>
-        </View>
+              </View>
+              {preview ? (
+                <Image
+                  source={{ uri: preview.url }}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              ) : null}
+            </SafeAreaView>
+          </View>
+        </SafeAreaProvider>
       </Modal>
     </SectionCard>
   );
@@ -246,12 +348,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: TILE_GAP,
     marginBottom: 12,
   },
   tile: {
-    width: '31.5%',
-    aspectRatio: 1,
+    flexShrink: 0,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: authGlass.background,
@@ -302,6 +403,21 @@ const styles = StyleSheet.create({
     color: darkColors.destructive,
     fontSize: 12,
     marginBottom: 12,
+  },
+  failedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  failedText: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  retryAll: {
+    color: darkColors.primary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   previewBackdrop: {
     flex: 1,

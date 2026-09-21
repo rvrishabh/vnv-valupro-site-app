@@ -31,6 +31,7 @@
     "react-native-compass-heading": "2.0.2",
     "react-native-config": "1.6.1",
     "react-native-css-interop": "^0.2.3",
+    "react-native-image-picker": "^8.2.1",
     "react-native-keychain": "^10.0.0",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-paper": "^5.14.5",
