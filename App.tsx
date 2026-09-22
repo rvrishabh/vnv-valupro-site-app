@@ -6,14 +6,22 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ToastManager from 'toastify-react-native';
 import './global.css';
 import RootNavigator from './src/navigation/RootNavigator';
+import { warmBackend } from './src/services/api/client';
 import { applyGlobalFont, darkColors, darkPaperTheme } from './src/theme';
 
 applyGlobalFont();
 
+// Kick the backend awake the instant the app opens — see warmBackend's own
+// comment for why (the free-tier host sleeps when idle).
+warmBackend();
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // A cold backend can outlast one retry; a second one (same backoff:
+      // 1s, then 2s) covers most of what we've seen without piling up
+      // requests for a server that's genuinely down.
+      retry: 2,
       staleTime: 30_000,
     },
   },

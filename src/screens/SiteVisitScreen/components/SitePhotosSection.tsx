@@ -16,6 +16,7 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SectionCard } from '../../../components/SectionCard';
+import { PhotoGridSkeleton } from './PhotoGridSkeleton';
 import { useDeleteSitePhotoMutation } from '../../../mutations/site-visit/useDeleteSitePhotoMutation';
 import { useUploadSitePhotoMutation } from '../../../mutations/site-visit/useUploadSitePhotoMutation';
 import { AppStackParamList } from '../../../navigation/types';
@@ -190,7 +191,7 @@ export function SitePhotosSection({ valuationId, readOnly, error }: SitePhotosSe
       ) : null}
 
       {isLoading ? (
-        <ActivityIndicator color={darkColors.primary} style={styles.loader} />
+        <PhotoGridSkeleton />
       ) : (
         <View style={styles.grid} onLayout={event => setGridWidth(event.nativeEvent.layout.width)}>
           {sitePhotos.map(photo => (
@@ -341,9 +342,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 12,
-  },
-  loader: {
-    marginVertical: 20,
   },
   grid: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useCallback } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -8,8 +8,11 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { authGlass } from '../theme/glassSurface';
 import { darkColors } from '../theme/colors';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type AppButtonProps = {
   label: string;
@@ -22,6 +25,8 @@ type AppButtonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
+const PRESS_SCALE = 0.97;
+
 export function AppButton({
   label,
   onPress,
@@ -33,24 +38,39 @@ export function AppButton({
 }: AppButtonProps) {
   const isInteractionDisabled = Boolean(disabled || loading);
   const isPrimary = variant === 'primary';
-  const [pressed, setPressed] = useState(false);
+  const pressed = useSharedValue(0);
+
+  const handlePressIn = useCallback(() => {
+    pressed.value = withSpring(1, { damping: 20, stiffness: 320 });
+  }, [pressed]);
+
+  const handlePressOut = useCallback(() => {
+    pressed.value = withSpring(0, { damping: 18, stiffness: 220 });
+  }, [pressed]);
+
+  const pressAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - pressed.value * (1 - PRESS_SCALE) }],
+    opacity: 1 - pressed.value * 0.1,
+  }));
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={isInteractionDisabled ? undefined : onPress}
-      onPressIn={() => setPressed(true)}
-      onPressOut={() => setPressed(false)}
+      onPressIn={isInteractionDisabled ? undefined : handlePressIn}
+      onPressOut={isInteractionDisabled ? undefined : handlePressOut}
       disabled={isInteractionDisabled}
       // NOTE: keep this a plain array, not a `({ pressed }) => [...]` function.
       // nativewind's css-interop wraps Pressable and doesn't resolve
       // function-style props — it silently drops the computed styles,
-      // leaving the button with no background/border/sizing at all.
+      // leaving the button with no background/border/sizing at all. The
+      // animated scale/opacity comes in as a plain style object here, same
+      // as GlassPanel, which is unaffected by that bug.
       style={[
         styles.base,
         isPrimary ? styles.primary : styles.secondary,
-        pressed && !isInteractionDisabled && styles.pressed,
         disabled && !loading && styles.disabled,
         style,
+        pressAnimatedStyle,
       ]}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -66,7 +86,7 @@ export function AppButton({
           </Text>
         </View>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -90,9 +110,6 @@ const styles = StyleSheet.create({
     backgroundColor: authGlass.background,
     borderWidth: 1,
     borderColor: authGlass.border,
-  },
-  pressed: {
-    opacity: 0.88,
   },
   disabled: {
     opacity: 0.5,

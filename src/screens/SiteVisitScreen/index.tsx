@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Control, FieldErrors, useForm, useWatch } from 'react-hook-form';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -50,6 +49,7 @@ import { buildInitialValues, isVisitEditable } from '../../utils/site-visit.util
 import { FloorsSection } from './components/FloorsSection';
 import { GpsField } from './components/GpsField';
 import { SitePhotosSection } from './components/SitePhotosSection';
+import { SiteVisitSkeleton } from './components/SiteVisitSkeleton';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'SiteVisit'>;
 
@@ -228,7 +228,7 @@ export default function SiteVisitScreen({ route, navigation }: Props) {
     return (
       <View style={styles.flex}>
         <ScreenHeader title="Site visit" />
-        <ActivityIndicator color={darkColors.primary} style={styles.loader} />
+        <SiteVisitSkeleton />
       </View>
     );
   }
@@ -452,7 +452,6 @@ export default function SiteVisitScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  loader: { marginTop: 48 },
   content: {
     paddingHorizontal: 16,
     paddingBottom: 32,

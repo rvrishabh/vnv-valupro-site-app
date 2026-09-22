@@ -23,21 +23,58 @@ type RetriableRequest = AxiosRequestConfig & {
   _retry?: boolean;
 };
 
+// The backend (Render free tier) spins down after ~15 min idle; the next
+// request then waits for a cold container instead of the usual few hundred
+// ms. 20s wasn't always enough to survive that wait, so both clients give a
+// cold start real room — this only affects the rare slow request, not the
+// normal-case latency.
+const REQUEST_TIMEOUT_MS = 45000;
+
 export const authlessClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 20000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 20000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
 export const setOnAuthFailure = (handler: (() => void) | null) => {
   onAuthFailureHandler = handler;
 };
+
+/**
+ * Fired once as soon as the app launches (before the engineer has typed
+ * anything) so a cold backend starts waking up behind the splash/login
+ * screen instead of behind whatever the engineer taps first. Best-effort:
+ * failures here are silent — the request that actually needs the data will
+ * retry and surface its own error if the server is still unreachable.
+ */
+export const warmBackend = () => {
+  const origin = BASE_URL?.replace(/\/api\/v1\/?$/, '');
+  if (!origin) {
+    return;
+  }
+  fetch(origin).catch(() => {});
+};
+
+/** Shown when a request never got a response — most often a cold Render instance waking up. */
+export const NETWORK_ERROR_MESSAGE =
+  "Couldn't reach the server — it may be waking up after being idle. Wait a few seconds and try again.";
+
+/**
+ * True for the specific "never got a response" failure `getApiErrorMessage`
+ * produces — i.e. likely a cold start, not a real 4xx/5xx from the server.
+ * API functions re-throw a plain `Error(getApiErrorMessage(...))`, so by the
+ * time a mutation's `retry` predicate sees it, message-matching is the only
+ * signal left; used to retry only the safe, idempotent case (auth calls
+ * that never reached the server) without retrying a genuine rejection.
+ */
+export const isNetworkErrorMessage = (error: unknown): boolean =>
+  error instanceof Error && error.message === NETWORK_ERROR_MESSAGE;
 
 /**
  * The backend reports failures as `{ success: false, error, statusCode }`, where
@@ -49,7 +86,7 @@ export const getApiErrorMessage = (
 ): string => {
   const axiosError = error as AxiosError<ApiErrorEnvelope>;
   if (axiosError?.isAxiosError && !axiosError.response) {
-    return 'Network error. Please check your connection.';
+    return NETWORK_ERROR_MESSAGE;
   }
   const apiError = axiosError?.response?.data?.error;
   if (Array.isArray(apiError)) {

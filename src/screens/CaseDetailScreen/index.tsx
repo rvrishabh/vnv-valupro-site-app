@@ -1,7 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   Platform,
@@ -17,6 +16,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { getApiErrorMessage } from '../../api';
 import { AppButton } from '../../components/AppButton';
 import { EmptyState } from '../../components/EmptyState';
+import { CaseDetailSkeleton } from './components/CaseDetailSkeleton';
 import { GlassPanel } from '../../components/GlassPanel';
 import { InfoRow } from '../../components/InfoRow';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -67,7 +67,7 @@ export default function CaseDetailScreen({ route, navigation }: Props) {
     return (
       <View style={styles.flex}>
         <ScreenHeader title="Case" />
-        <ActivityIndicator color={darkColors.primary} style={styles.loader} />
+        <CaseDetailSkeleton />
       </View>
     );
   }
@@ -217,7 +217,6 @@ export default function CaseDetailScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  loader: { marginTop: 48 },
   content: {
     paddingHorizontal: 16,
     paddingBottom: 24,

@@ -1,10 +1,11 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  LayoutChangeEvent,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AppButton } from '../../components/AppButton';
 import { EmptyState } from '../../components/EmptyState';
@@ -26,6 +28,7 @@ import { darkColors } from '../../theme/colors';
 import { getApiErrorMessage } from '../../api';
 import { getVisitStage } from '../../utils/site-visit.utils';
 import { CaseListItem } from './components/CaseListItem';
+import { CaseListSkeleton } from './components/CaseListSkeleton';
 
 type Tab = 'pending' | 'submitted';
 
@@ -41,6 +44,37 @@ export default function CasesScreen() {
   const [tab, setTab] = useState<Tab>('pending');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search.trim(), 400);
+
+  // Sliding gold pill behind the tabs, in place of a hard background swap.
+  const tabLayouts = useRef<Partial<Record<Tab, { x: number; width: number }>>>({});
+  const indicatorX = useSharedValue(0);
+  const indicatorWidth = useSharedValue(0);
+  const indicatorOpacity = useSharedValue(0);
+
+  const measureTab = (key: Tab) => (event: LayoutChangeEvent) => {
+    const { x, width } = event.nativeEvent.layout;
+    tabLayouts.current[key] = { x, width };
+    if (key === tab && indicatorWidth.value === 0) {
+      indicatorX.value = x;
+      indicatorWidth.value = width;
+      indicatorOpacity.value = withTiming(1, { duration: 150 });
+    }
+  };
+
+  const selectTab = (key: Tab) => {
+    setTab(key);
+    const layout = tabLayouts.current[key];
+    if (layout) {
+      indicatorX.value = withSpring(layout.x, { damping: 22, stiffness: 260 });
+      indicatorWidth.value = withSpring(layout.width, { damping: 22, stiffness: 260 });
+    }
+  };
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.value }],
+    width: indicatorWidth.value,
+    opacity: indicatorOpacity.value,
+  }));
 
   const {
     cases,
@@ -120,16 +154,18 @@ export default function CasesScreen() {
         </View>
 
         <View style={styles.tabs}>
+          <Animated.View style={[styles.tabIndicator, indicatorStyle]} />
           {TABS.map(({ key, label }) => {
             const selected = key === tab;
             const count = key === 'pending' ? pending.length : submitted.length;
             return (
               <Pressable
                 key={key}
-                onPress={() => setTab(key)}
+                onPress={() => selectTab(key)}
+                onLayout={measureTab(key)}
                 accessibilityRole="tab"
                 accessibilityState={{ selected }}
-                style={[styles.tab, selected && styles.tabSelected]}
+                style={styles.tab}
               >
                 <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>
                   {label} · {count}
@@ -141,7 +177,7 @@ export default function CasesScreen() {
       </SafeAreaView>
 
       {isLoading ? (
-        <ActivityIndicator color={darkColors.primary} style={styles.loader} />
+        <CaseListSkeleton />
       ) : isError ? (
         <EmptyState
           icon="cloud-off-outline"
@@ -245,6 +281,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
     marginTop: 14,
     marginBottom: 6,
+    position: 'relative',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    borderRadius: 999,
+    backgroundColor: darkColors.cta,
+    zIndex: 0,
   },
   tab: {
     flex: 1,
@@ -253,11 +298,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: authGlass.border,
-    backgroundColor: authGlass.background,
-  },
-  tabSelected: {
-    backgroundColor: darkColors.cta,
-    borderColor: darkColors.cta,
+    backgroundColor: 'transparent',
+    zIndex: 1,
   },
   tabLabel: {
     color: darkColors.mutedForeground,
@@ -267,9 +309,6 @@ const styles = StyleSheet.create({
   tabLabelSelected: {
     color: darkColors.ctaForeground,
     fontWeight: '700',
-  },
-  loader: {
-    marginTop: 48,
   },
   listContent: {
     paddingHorizontal: 18,

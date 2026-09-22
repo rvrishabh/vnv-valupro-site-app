@@ -82,8 +82,7 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
   const [flash, setFlash] = useState<FlashMode>('auto');
   const [busy, setBusy] = useState(false);
   const [taken, setTaken] = useState<string[]>([]);
-  const [zoom, setZoom] = useState<number | undefined>(undefined);
-  const [activeZoom, setActiveZoom] = useState(1);
+  const [zoom, setZoom] = useState(1);
   const [pending, setPending] = useState<PendingShot | null>(null);
 
   const cameraRef = useRef<CameraApi>(null);
@@ -103,15 +102,6 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
       ]);
       setPermission(camera && gps ? 'granted' : 'denied');
     })();
-  }, []);
-
-  // The native camera only pinch-zooms while `zoom` is unset, so a preset is
-  // applied for a moment and then released; the lens keeps the zoom it was
-  // given and pinch carries on from there.
-  const applyZoom = useCallback((value: number) => {
-    setActiveZoom(value);
-    setZoom(value);
-    setTimeout(() => setZoom(undefined), 150);
   }, []);
 
   const left = remaining - taken.length;
@@ -274,7 +264,14 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
             focusMode="on"
             zoomMode="on"
             zoom={zoom}
-            onZoom={event => setActiveZoom(event.nativeEvent.zoom)}
+            // Fully controlled, per the library's own documented pattern: pinch
+            // reports its desired zoom here and we feed it straight back as the
+            // `zoom` prop. Releasing `zoom` to `undefined` between taps (the
+            // previous approach) is what let the iOS Simulator's fake camera —
+            // which treats a nil zoom as "reset to its 2x default" — snap the
+            // preset back to 2x after every tap; a real device doesn't do that,
+            // but staying controlled avoids the footgun entirely either way.
+            onZoom={event => setZoom(event.nativeEvent.zoom)}
             resizeMode="cover"
             shutterPhotoSound
             onError={event => Alert.alert('Camera error', event.nativeEvent.errorMessage)}
@@ -282,17 +279,17 @@ function GeoCameraScreenContent({ route, navigation }: Props) {
         </Suspense>
         <View style={styles.zoomBar} pointerEvents="box-none">
           {ZOOM_PRESETS.map(preset => {
-            const active = Math.abs(activeZoom - preset) < 0.25;
+            const active = Math.abs(zoom - preset) < 0.25;
             return (
               <TouchableOpacity
                 key={preset}
-                onPress={() => applyZoom(preset)}
+                onPress={() => setZoom(preset)}
                 accessibilityRole="button"
                 accessibilityLabel={`Zoom ${preset}x`}
                 style={[styles.zoomChip, active && styles.zoomChipActive]}
               >
                 <Text style={[styles.zoomText, active && styles.zoomTextActive]}>
-                  {active && Math.abs(activeZoom - preset) > 0.02 ? `${activeZoom.toFixed(1)}x` : `${preset}x`}
+                  {active && Math.abs(zoom - preset) > 0.02 ? `${zoom.toFixed(1)}x` : `${preset}x`}
                 </Text>
               </TouchableOpacity>
             );
